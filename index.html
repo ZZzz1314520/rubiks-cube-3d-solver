@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D 魔方复原</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111318;
+      --panel: #1a1d24;
+      --panel-2: #222733;
+      --line: #343b49;
+      --text: #f5f7fb;
+      --muted: #aeb6c7;
+      --accent: #44c7a6;
+      --accent-2: #f0c95a;
+      --danger: #ff6b6b;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 25% 20%, rgba(68, 199, 166, 0.12), transparent 28rem),
+        radial-gradient(circle at 80% 8%, rgba(240, 201, 90, 0.1), transparent 24rem),
+        var(--bg);
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      height: 100vh;
+    }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #cubeCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    #cubeCanvas.dragging {
+      cursor: grabbing;
+    }
+
+    .brand {
+      position: absolute;
+      left: 24px;
+      top: 22px;
+      max-width: min(540px, calc(100% - 48px));
+      pointer-events: none;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 5vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+      font-weight: 800;
+    }
+
+    .brand p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      padding: 20px;
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(26, 29, 36, 0.92);
+      backdrop-filter: blur(14px);
+      overflow: auto;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    button {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      color: #6f7788;
+      background: #181b22;
+    }
+
+    .primary {
+      color: #07130f;
+      border-color: transparent;
+      background: var(--accent);
+    }
+
+    .secondary {
+      color: #171306;
+      border-color: transparent;
+      background: var(--accent-2);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      min-height: 74px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .control {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .control label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin-top: 12px;
+      accent-color: var(--accent);
+    }
+
+    .status {
+      min-height: 44px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      line-height: 1.4;
+      font-size: 13px;
+    }
+
+    .status.error {
+      border-color: rgba(255, 107, 107, 0.45);
+      color: #ffd4d4;
+    }
+
+    .moves {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+
+    .moves h2 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .moveList {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 8px;
+      min-height: 142px;
+      max-height: 310px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      overflow: auto;
+    }
+
+    .movePill {
+      min-width: 38px;
+      height: 30px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: #181b22;
+      font-weight: 700;
+      line-height: 28px;
+      text-align: center;
+    }
+
+    .movePill.active {
+      color: #07130f;
+      border-color: transparent;
+      background: var(--accent);
+    }
+
+    .hint {
+      margin-top: auto;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 840px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(460px, 62vh) auto;
+        min-height: 100vh;
+        height: auto;
+      }
+
+      .panel {
+        height: auto;
+        border-left: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .brand {
+        top: 16px;
+        left: 16px;
+      }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js" onerror="window.__cubeCdnFailed = true"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js" onerror="window.__cubeCdnFailed = true"></script>
+</head>
+<body>
+  <main class="app">
+    <section class="stage" aria-label="3D 魔方舞台">
+      <canvas id="cubeCanvas"></canvas>
+      <div class="brand">
+        <h1>3D 魔方</h1>
+        <p>拖动魔方面转动层，拖动空白区域旋转视角。点击复原后会按求解步骤逐步播放动画。</p>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="toolbar">
+        <button id="scrambleButton" class="secondary" type="button">打乱</button>
+        <button id="solveButton" class="primary" type="button">复原</button>
+        <button id="resetButton" type="button">重置</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span>当前步数</span>
+          <strong id="moveCount">0</strong>
+        </div>
+        <div class="stat">
+          <span>解法步数</span>
+          <strong id="solveCount">0</strong>
+        </div>
+      </div>
+
+      <div class="control">
+        <label for="speedRange">
+          <span>动画速度</span>
+          <strong id="speedLabel">1.0x</strong>
+        </label>
+        <input id="speedRange" type="range" min="0.5" max="2.2" value="1" step="0.1">
+      </div>
+
+      <div id="status" class="status">正在加载 3D 引擎和求解器...</div>
+
+      <div class="moves">
+        <h2>还原步骤</h2>
+        <div id="moveList" class="moveList" aria-live="polite"></div>
+      </div>
+
+      <p class="hint">提示：从边块或角块拖动更接近真实魔方手感；动画播放时会暂时锁定操作，避免状态错层。</p>
+    </aside>
+  </main>
+
+  <script type="module">
+    const ui = {
+      canvas: document.querySelector("#cubeCanvas"),
+      scrambleButton: document.querySelector("#scrambleButton"),
+      solveButton: document.querySelector("#solveButton"),
+      resetButton: document.querySelector("#resetButton"),
+      moveCount: document.querySelector("#moveCount"),
+      solveCount: document.querySelector("#solveCount"),
+      speedRange: document.querySelector("#speedRange"),
+      speedLabel: document.querySelector("#speedLabel"),
+      status: document.querySelector("#status"),
+      moveList: document.querySelector("#moveList")
+    };
+
+    const HALF_PI = Math.PI / 2;
+    const CUBE_GAP = 1.08;
+    const CUBELET_SIZE = 0.98;
+    const DRAG_THRESHOLD = 18;
+    const FACE_COLORS = {
+      U: 0xf4f7fb,
+      D: 0xf5d547,
+      R: 0xd83b32,
+      L: 0xf28c28,
+      F: 0x2eb872,
+      B: 0x2878d7
+    };
+
+    const FACE_DATA = {
+      U: { axis: "y", axisIndex: 1, layer: 1, baseAngle: -HALF_PI },
+      D: { axis: "y", axisIndex: 1, layer: -1, baseAngle: HALF_PI },
+      R: { axis: "x", axisIndex: 0, layer: 1, baseAngle: -HALF_PI },
+      L: { axis: "x", axisIndex: 0, layer: -1, baseAngle: HALF_PI },
+      F: { axis: "z", axisIndex: 2, layer: 1, baseAngle: -HALF_PI },
+      B: { axis: "z", axisIndex: 2, layer: -1, baseAngle: HALF_PI }
+    };
+
+    const FACE_BY_LAYER = {
+      "0:1": "R",
+      "0:-1": "L",
+      "1:1": "U",
+      "1:-1": "D",
+      "2:1": "F",
+      "2:-1": "B"
+    };
+
+    const AXIS_NAMES = ["x", "y", "z"];
+    const MOVES = ["U", "D", "R", "L", "F", "B"];
+    const TURN_SUFFIXES = ["", "'", "2"];
+
+    let THREE;
+    let scene;
+    let camera;
+    let renderer;
+    let cubeRoot;
+    let cubeModel;
+    let solverReady = false;
+    let isBusy = false;
+    let moveTotal = 0;
+    let activePointer = null;
+    let orbit = { yaw: -Math.PI / 4, pitch: 0.56, distance: 7.4 };
+    let cubelets = [];
+    let hitTargets = [];
+
+    const raycaster = { current: null };
+    const pointerNdc = { current: null };
+
+    function setStatus(message, error = false) {
+      ui.status.textContent = message;
+      ui.status.classList.toggle("error", error);
+    }
+
+    function setControlsEnabled(enabled) {
+      ui.scrambleButton.disabled = !enabled || !solverReady;
+      ui.solveButton.disabled = !enabled || !solverReady;
+      ui.resetButton.disabled = !enabled;
+      ui.speedRange.disabled = !enabled && isBusy;
+    }
+
+    function waitFrame() {
+      return new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+
+    async function boot() {
+      try {
+        if (window.__cubeCdnFailed || !window.Cube) {
+          throw new Error("cubejs CDN 加载失败");
+        }
+
+        THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+        raycaster.current = new THREE.Raycaster();
+        pointerNdc.current = new THREE.Vector2();
+
+        initScene();
+        createCube();
+        bindEvents();
+        animate();
+        resize();
+
+        setControlsEnabled(false);
+        setStatus("正在初始化 Kociemba 两阶段求解器，首次加载需要几秒...");
+        await waitFrame();
+        window.Cube.initSolver();
+        validateMoveDefinitions();
+        solverReady = true;
+        setControlsEnabled(true);
+        setStatus("就绪。拖动魔方面转层，拖动空白处旋转视角。");
+      } catch (error) {
+        console.error(error);
+        setControlsEnabled(false);
+        setStatus(`加载失败：${error.message}。请确认网络可以访问 CDN 后刷新页面。`, true);
+      }
+    }
+
+    function initScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x111318);
+
+      camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+      renderer = new THREE.WebGLRenderer({
+        canvas: ui.canvas,
+        antialias: true,
+        alpha: false
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.18;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.72);
+      scene.add(ambient);
+
+      const hemisphere = new THREE.HemisphereLight(0xf7fbff, 0xd9caa5, 1.45);
+      scene.add(hemisphere);
+
+      const key = new THREE.DirectionalLight(0xffffff, 2.1);
+      key.position.set(4, 6, 5);
+      key.castShadow = true;
+      key.shadow.bias = -0.0006;
+      key.shadow.normalBias = 0.025;
+      scene.add(key);
+
+      const fill = new THREE.DirectionalLight(0xd9efff, 1.55);
+      fill.position.set(-5, 3, -4);
+      scene.add(fill);
+
+      const rim = new THREE.DirectionalLight(0xfff3d0, 0.95);
+      rim.position.set(2, 2, -6);
+      scene.add(rim);
+
+      const bounce = new THREE.DirectionalLight(0xfff0c2, 1.35);
+      bounce.position.set(0, -5, 2);
+      scene.add(bounce);
+
+      cubeRoot = new THREE.Group();
+      scene.add(cubeRoot);
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(12, 12),
+        new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.22 })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -2.35;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      updateCamera();
+    }
+
+    function createCube() {
+      clearCube();
+      cubeModel = new window.Cube();
+      moveTotal = 0;
+      ui.moveCount.textContent = "0";
+      ui.solveCount.textContent = "0";
+      ui.moveList.innerHTML = "";
+
+      const bodyGeometry = new THREE.BoxGeometry(CUBELET_SIZE, CUBELET_SIZE, CUBELET_SIZE);
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0x10141b,
+        roughness: 0.56,
+        metalness: 0.04
+      });
+      const stickerGeometry = new THREE.PlaneGeometry(0.78, 0.78);
+
+      for (let x = -1; x <= 1; x += 1) {
+        for (let y = -1; y <= 1; y += 1) {
+          for (let z = -1; z <= 1; z += 1) {
+            const group = new THREE.Group();
+            group.position.set(x * CUBE_GAP, y * CUBE_GAP, z * CUBE_GAP);
+            group.userData.coord = { x, y, z };
+
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            body.userData.cubelet = group;
+            group.add(body);
+            hitTargets.push(body);
+
+            addSticker(group, stickerGeometry, "R", x === 1);
+            addSticker(group, stickerGeometry, "L", x === -1);
+            addSticker(group, stickerGeometry, "U", y === 1);
+            addSticker(group, stickerGeometry, "D", y === -1);
+            addSticker(group, stickerGeometry, "F", z === 1);
+            addSticker(group, stickerGeometry, "B", z === -1);
+
+            cubeRoot.add(group);
+            cubelets.push(group);
+          }
+        }
+      }
+    }
+
+    function clearCube() {
+      if (!cubeRoot) return;
+      cubelets.forEach((cubelet) => cubeRoot.remove(cubelet));
+      cubelets = [];
+      hitTargets = [];
+    }
+
+    function addSticker(group, geometry, face, shouldAdd) {
+      if (!shouldAdd) return;
+      const material = new THREE.MeshStandardMaterial({
+        color: FACE_COLORS[face],
+        roughness: 0.42,
+        metalness: 0.02,
+        side: THREE.DoubleSide
+      });
+      const sticker = new THREE.Mesh(geometry, material);
+      const offset = CUBELET_SIZE / 2 + 0.006;
+
+      if (face === "R") {
+        sticker.position.x = offset;
+        sticker.rotation.y = Math.PI / 2;
+      } else if (face === "L") {
+        sticker.position.x = -offset;
+        sticker.rotation.y = -Math.PI / 2;
+      } else if (face === "U") {
+        sticker.position.y = offset;
+        sticker.rotation.x = -Math.PI / 2;
+      } else if (face === "D") {
+        sticker.position.y = -offset;
+        sticker.rotation.x = Math.PI / 2;
+      } else if (face === "F") {
+        sticker.position.z = offset;
+      } else if (face === "B") {
+        sticker.position.z = -offset;
+        sticker.rotation.y = Math.PI;
+      }
+
+      sticker.userData.cubelet = group;
+      sticker.castShadow = true;
+      group.add(sticker);
+      hitTargets.push(sticker);
+    }
+
+    function bindEvents() {
+      window.addEventListener("resize", resize);
+      ui.canvas.addEventListener("pointerdown", onPointerDown);
+      ui.canvas.addEventListener("pointermove", onPointerMove);
+      ui.canvas.addEventListener("pointerup", onPointerUp);
+      ui.canvas.addEventListener("pointercancel", onPointerUp);
+      ui.canvas.addEventListener("wheel", onWheel, { passive: false });
+      ui.scrambleButton.addEventListener("click", () => scrambleCube(24));
+      ui.solveButton.addEventListener("click", runSolve);
+      ui.resetButton.addEventListener("click", resetCube);
+      ui.speedRange.addEventListener("input", () => {
+        ui.speedLabel.textContent = `${Number(ui.speedRange.value).toFixed(1)}x`;
+      });
+    }
+
+    function resize() {
+      const rect = ui.canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width));
+      const height = Math.max(1, Math.floor(rect.height));
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    function updateCamera() {
+      orbit.pitch = Math.max(-1.15, Math.min(1.15, orbit.pitch));
+      orbit.distance = Math.max(5.2, Math.min(11, orbit.distance));
+      camera.position.set(
+        Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.distance,
+        Math.sin(orbit.pitch) * orbit.distance,
+        Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.distance
+      );
+      camera.lookAt(0, 0, 0);
+    }
+
+    function onWheel(event) {
+      event.preventDefault();
+      orbit.distance += Math.sign(event.deltaY) * 0.35;
+      updateCamera();
+    }
+
+    function onPointerDown(event) {
+      if (isBusy || event.button !== 0) return;
+      ui.canvas.setPointerCapture(event.pointerId);
+      ui.canvas.classList.add("dragging");
+
+      const hit = pick(event);
+      activePointer = {
+        id: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        mode: hit ? "cube" : "orbit",
+        hit,
+        consumed: false
+      };
+    }
+
+    function onPointerMove(event) {
+      if (!activePointer || activePointer.id !== event.pointerId) return;
+      const dx = event.clientX - activePointer.lastX;
+      const dy = event.clientY - activePointer.lastY;
+      activePointer.lastX = event.clientX;
+      activePointer.lastY = event.clientY;
+
+      if (activePointer.mode === "orbit") {
+        orbit.yaw -= dx * 0.006;
+        orbit.pitch -= dy * 0.006;
+        updateCamera();
+        return;
+      }
+
+      if (activePointer.consumed) return;
+      const totalDx = event.clientX - activePointer.startX;
+      const totalDy = event.clientY - activePointer.startY;
+      if (Math.hypot(totalDx, totalDy) < DRAG_THRESHOLD) return;
+
+      const move = inferMoveFromDrag(activePointer.hit, totalDx, totalDy);
+      activePointer.consumed = true;
+      if (move) {
+        applyMove(move, { animate: true, updateModel: true });
+      } else {
+        setStatus("从边块或角块拖动会更容易判定转动方向。");
+      }
+    }
+
+    function onPointerUp(event) {
+      if (!activePointer || activePointer.id !== event.pointerId) return;
+      activePointer = null;
+      ui.canvas.classList.remove("dragging");
+    }
+
+    function pick(event) {
+      const rect = ui.canvas.getBoundingClientRect();
+      pointerNdc.current.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
+      const hits = raycaster.current.intersectObjects(hitTargets, false);
+      if (!hits.length) return null;
+
+      const first = hits[0];
+      const normal = first.face.normal.clone().transformDirection(first.object.matrixWorld);
+      const snappedNormal = snapVector(normal);
+      return {
+        cubelet: first.object.userData.cubelet,
+        normal: snappedNormal,
+        point: first.point.clone()
+      };
+    }
+
+    function snapVector(vector) {
+      const values = [Math.abs(vector.x), Math.abs(vector.y), Math.abs(vector.z)];
+      const index = values.indexOf(Math.max(...values));
+      const snapped = new THREE.Vector3(0, 0, 0);
+      snapped.setComponent(index, Math.sign(vector.getComponent(index)) || 1);
+      return snapped;
+    }
+
+    function inferMoveFromDrag(hit, dx, dy) {
+      const normal = hit.normal.clone().normalize();
+      const dragWorld = screenDragToWorld(dx, dy);
+      const tangent = dragWorld.clone().sub(normal.clone().multiplyScalar(dragWorld.dot(normal)));
+      if (tangent.lengthSq() < 0.0001) return null;
+      tangent.normalize();
+
+      const axisVector = normal.clone().cross(tangent).normalize();
+      const snappedAxis = snapVector(axisVector);
+      const axisIndex = dominantAxis(snappedAxis);
+      const axisSign = Math.sign(snappedAxis.getComponent(axisIndex)) || 1;
+      const coord = hit.cubelet.userData.coord;
+      const layer = [coord.x, coord.y, coord.z][axisIndex];
+
+      if (layer !== 0) {
+        return moveFromPhysicalTurn(axisIndex, layer, axisSign * HALF_PI);
+      }
+
+      return fallbackFaceMove(hit, tangent);
+    }
+
+    function fallbackFaceMove(hit, tangent) {
+      const normal = hit.normal.clone().normalize();
+      const faceAxisIndex = dominantAxis(normal);
+      const faceSign = Math.sign(normal.getComponent(faceAxisIndex)) || 1;
+      const faceCenter = normal.clone().multiplyScalar(CUBE_GAP);
+      const radius = hit.point.clone().sub(faceCenter);
+      radius.sub(normal.clone().multiplyScalar(radius.dot(normal)));
+      if (radius.lengthSq() < 0.0001) return null;
+
+      const positiveDirection = normal.clone().cross(radius).normalize();
+      const signedAngleAboutNormal = positiveDirection.dot(tangent) >= 0 ? HALF_PI : -HALF_PI;
+      return moveFromPhysicalTurn(faceAxisIndex, faceSign, faceSign * signedAngleAboutNormal);
+    }
+
+    function screenDragToWorld(dx, dy) {
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+      return right.multiplyScalar(dx).add(up.multiplyScalar(-dy)).normalize();
+    }
+
+    function dominantAxis(vector) {
+      const abs = [Math.abs(vector.x), Math.abs(vector.y), Math.abs(vector.z)];
+      return abs.indexOf(Math.max(...abs));
+    }
+
+    function moveFromPhysicalTurn(axisIndex, layer, angleAboutPositiveAxis) {
+      const face = FACE_BY_LAYER[`${axisIndex}:${layer}`];
+      if (!face) return null;
+      const turns = Math.round(angleAboutPositiveAxis / FACE_DATA[face].baseAngle);
+      const normalized = ((turns % 4) + 4) % 4;
+      if (normalized === 0) return null;
+      if (normalized === 1) return face;
+      if (normalized === 2) return `${face}2`;
+      return `${face}'`;
+    }
+
+    async function applyMove(move, options = {}) {
+      const { animate: shouldAnimate = true, updateModel = true, countMove = true } = options;
+      if (isBusy) return false;
+      const parsed = parseMove(move);
+      if (!parsed) return false;
+
+      isBusy = true;
+      setControlsEnabled(false);
+      try {
+        await rotateLayer(parsed, shouldAnimate);
+        if (updateModel) cubeModel.move(move);
+        if (countMove) {
+          moveTotal += 1;
+          ui.moveCount.textContent = String(moveTotal);
+        }
+        if (cubeModel.isSolved()) {
+          setStatus("魔方已复原。");
+        }
+      } finally {
+        isBusy = false;
+        setControlsEnabled(true);
+      }
+      return true;
+    }
+
+    function parseMove(move) {
+      const match = /^([UDRLFB])([2']?)$/.exec(move.trim());
+      if (!match) return null;
+      const face = match[1];
+      const suffix = match[2];
+      const data = FACE_DATA[face];
+      const turns = suffix === "2" ? 2 : suffix === "'" ? -1 : 1;
+      return {
+        face,
+        suffix,
+        axis: data.axis,
+        axisIndex: data.axisIndex,
+        layer: data.layer,
+        angle: data.baseAngle * turns
+      };
+    }
+
+    async function rotateLayer(move, shouldAnimate) {
+      const affected = cubelets.filter((cubelet) => {
+        const coord = cubelet.userData.coord;
+        return Math.round(coord[move.axis]) === move.layer;
+      });
+
+      const pivot = new THREE.Group();
+      cubeRoot.add(pivot);
+      affected.forEach((cubelet) => pivot.attach(cubelet));
+
+      if (shouldAnimate) {
+        const duration = Math.max(120, 360 / Number(ui.speedRange.value));
+        const start = performance.now();
+        await new Promise((resolve) => {
+          const tick = (now) => {
+            const t = Math.min(1, (now - start) / duration);
+            const eased = easeInOutCubic(t);
+            pivot.rotation[move.axis] = move.angle * eased;
+            if (t < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              resolve();
+            }
+          };
+          requestAnimationFrame(tick);
+        });
+      } else {
+        pivot.rotation[move.axis] = move.angle;
+      }
+
+      pivot.updateMatrixWorld(true);
+      affected.forEach((cubelet) => {
+        cubeRoot.attach(cubelet);
+        cubelet.position.set(
+          roundToGrid(cubelet.position.x),
+          roundToGrid(cubelet.position.y),
+          roundToGrid(cubelet.position.z)
+        );
+        cubelet.userData.coord = rotateCoord(cubelet.userData.coord, move.axisIndex, move.angle);
+      });
+      cubeRoot.remove(pivot);
+    }
+
+    function rotateCoord(coord, axisIndex, angle) {
+      const turns = ((Math.round(angle / HALF_PI) % 4) + 4) % 4;
+      let { x, y, z } = coord;
+      for (let i = 0; i < turns; i += 1) {
+        if (axisIndex === 0) {
+          [y, z] = [-z, y];
+        } else if (axisIndex === 1) {
+          [x, z] = [z, -x];
+        } else {
+          [x, y] = [-y, x];
+        }
+      }
+      return { x, y, z };
+    }
+
+    function roundToGrid(value) {
+      return Math.round(value / CUBE_GAP) * CUBE_GAP;
+    }
+
+    function easeInOutCubic(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    async function scrambleCube(count = 24) {
+      if (isBusy || !solverReady) return;
+      const sequence = randomScramble(count);
+      ui.moveList.innerHTML = "";
+      ui.solveCount.textContent = "0";
+      setStatus("正在打乱...");
+      for (const move of sequence) {
+        await applyMove(move, { animate: true, updateModel: true, countMove: true });
+      }
+      setStatus(`已打乱：${sequence.join(" ")}`);
+    }
+
+    function randomScramble(count) {
+      const sequence = [];
+      let previousFace = "";
+      for (let i = 0; i < count; i += 1) {
+        let face = previousFace;
+        while (face === previousFace) {
+          face = MOVES[Math.floor(Math.random() * MOVES.length)];
+        }
+        previousFace = face;
+        sequence.push(face + TURN_SUFFIXES[Math.floor(Math.random() * TURN_SUFFIXES.length)]);
+      }
+      return sequence;
+    }
+
+    async function runSolve() {
+      if (isBusy || !solverReady) return;
+      if (cubeModel.isSolved()) {
+        setStatus("已经是复原状态。");
+        return;
+      }
+
+      isBusy = true;
+      setControlsEnabled(false);
+      try {
+        setStatus("正在计算实用短解...");
+        await waitFrame();
+        const solution = solveCube();
+        renderMoveList(solution);
+        ui.solveCount.textContent = String(solution.length);
+        setStatus(`找到 ${solution.length} 步解法，开始还原动画。`);
+
+        for (let i = 0; i < solution.length; i += 1) {
+          markActiveMove(i);
+          isBusy = false;
+          await applyMove(solution[i], { animate: true, updateModel: true, countMove: true });
+          isBusy = true;
+        }
+        markActiveMove(-1);
+        setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束，但状态未完全复原。");
+      } catch (error) {
+        console.error(error);
+        setStatus(`求解失败：${error.message}`, true);
+      } finally {
+        isBusy = false;
+        setControlsEnabled(true);
+      }
+    }
+
+    function solveCube() {
+      const raw = cubeModel.solve();
+      const solution = raw.trim() ? raw.trim().split(/\s+/) : [];
+      const verifier = cubeModel.clone();
+      if (solution.length) verifier.move(solution.join(" "));
+      if (!verifier.isSolved()) {
+        throw new Error("求解器返回的步骤未能通过状态校验");
+      }
+      return solution;
+    }
+
+    function validateMoveDefinitions() {
+      const moves = MOVES.flatMap((face) => TURN_SUFFIXES.map((suffix) => face + suffix));
+      const failed = moves.filter((move) => {
+        const visualState = createLogicalState();
+        applyLogicalMove(visualState, move);
+        const testCube = new window.Cube();
+        testCube.move(move);
+        return logicalStateToFacelets(visualState) !== testCube.asString();
+      });
+
+      if (failed.length) {
+        throw new Error(`转动定义与求解器不一致：${failed.join(" ")}`);
+      }
+    }
+
+    function createLogicalState() {
+      const normals = {
+        U: [0, 1, 0],
+        D: [0, -1, 0],
+        R: [1, 0, 0],
+        L: [-1, 0, 0],
+        F: [0, 0, 1],
+        B: [0, 0, -1]
+      };
+      const state = [];
+
+      for (let x = -1; x <= 1; x += 1) {
+        for (let y = -1; y <= 1; y += 1) {
+          for (let z = -1; z <= 1; z += 1) {
+            const stickers = [];
+            Object.entries(normals).forEach(([face, normal]) => {
+              const isVisible =
+                (face === "U" && y === 1) ||
+                (face === "D" && y === -1) ||
+                (face === "R" && x === 1) ||
+                (face === "L" && x === -1) ||
+                (face === "F" && z === 1) ||
+                (face === "B" && z === -1);
+              if (isVisible) stickers.push({ normal: [...normal], color: face });
+            });
+            state.push({ coord: [x, y, z], stickers });
+          }
+        }
+      }
+
+      return state;
+    }
+
+    function applyLogicalMove(state, move) {
+      const parsed = parseMove(move);
+      state.forEach((cubelet) => {
+        if (cubelet.coord[parsed.axisIndex] !== parsed.layer) return;
+        cubelet.coord = rotateVectorParts(cubelet.coord, parsed.axisIndex, parsed.angle);
+        cubelet.stickers.forEach((sticker) => {
+          sticker.normal = rotateVectorParts(sticker.normal, parsed.axisIndex, parsed.angle);
+        });
+      });
+    }
+
+    function rotateVectorParts(parts, axisIndex, angle) {
+      const turns = ((Math.round(angle / HALF_PI) % 4) + 4) % 4;
+      let [x, y, z] = parts;
+      for (let i = 0; i < turns; i += 1) {
+        if (axisIndex === 0) {
+          [y, z] = [-z, y];
+        } else if (axisIndex === 1) {
+          [x, z] = [z, -x];
+        } else {
+          [x, y] = [-y, x];
+        }
+      }
+      return [x, y, z];
+    }
+
+    function logicalStateToFacelets(state) {
+      const output = Array(54);
+      "URFDLB".split("").forEach((face, index) => {
+        output[index * 9 + 4] = face;
+      });
+
+      state.forEach((cubelet) => {
+        cubelet.stickers.forEach((sticker) => {
+          const face = faceFromNormal(sticker.normal);
+          output[faceletIndex(face, cubelet.coord)] = sticker.color;
+        });
+      });
+
+      return output.join("");
+    }
+
+    function faceFromNormal(normal) {
+      const key = normal.join(",");
+      return {
+        "0,1,0": "U",
+        "0,-1,0": "D",
+        "1,0,0": "R",
+        "-1,0,0": "L",
+        "0,0,1": "F",
+        "0,0,-1": "B"
+      }[key];
+    }
+
+    function faceletIndex(face, coord) {
+      const [x, y, z] = coord;
+      const base = { U: 0, R: 9, F: 18, D: 27, L: 36, B: 45 }[face];
+      let row;
+      let col;
+
+      if (face === "U") {
+        row = z + 1;
+        col = x + 1;
+      } else if (face === "R") {
+        row = 1 - y;
+        col = 1 - z;
+      } else if (face === "F") {
+        row = 1 - y;
+        col = x + 1;
+      } else if (face === "D") {
+        row = 1 - z;
+        col = x + 1;
+      } else if (face === "L") {
+        row = 1 - y;
+        col = z + 1;
+      } else {
+        row = 1 - y;
+        col = 1 - x;
+      }
+
+      return base + row * 3 + col;
+    }
+
+    function renderMoveList(moves) {
+      ui.moveList.innerHTML = "";
+      moves.forEach((move) => {
+        const pill = document.createElement("span");
+        pill.className = "movePill";
+        pill.textContent = move;
+        ui.moveList.appendChild(pill);
+      });
+    }
+
+    function markActiveMove(index) {
+      [...ui.moveList.children].forEach((child, childIndex) => {
+        child.classList.toggle("active", childIndex === index);
+      });
+      const active = ui.moveList.children[index];
+      if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+
+    function resetCube() {
+      if (isBusy) return;
+      createCube();
+      setStatus("已重置为复原状态。");
+      setControlsEnabled(true);
+    }
+
+    boot();
+  </script>
+</body>
+</html>
