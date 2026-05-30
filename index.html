@@ -95,7 +95,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -253,6 +253,83 @@
       line-height: 1.6;
     }
 
+    /* Loading spinner */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loaderOverlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 100;
+      background: var(--bg);
+      transition: opacity 0.4s ease;
+    }
+
+    .loaderOverlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loaderSpinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--line);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .loaderText {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* Step navigation */
+    .stepNav {
+      display: flex;
+      gap: 6px;
+    }
+
+    .stepNav button {
+      width: 34px;
+      height: 30px;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    /* Clickable move pill */
+    .movePill.clickable {
+      cursor: pointer;
+      transition: border-color 0.16s ease, transform 0.16s ease;
+    }
+
+    .movePill.clickable:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .movePill.done {
+      opacity: 0.5;
+    }
+
+    /* Keyboard hint */
+    .kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+      background: rgba(255,255,255,0.06);
+    }
+
     @media (max-width: 840px) {
       body {
         overflow: auto;
@@ -281,6 +358,11 @@
   <script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js" onerror="window.__cubeCdnFailed = true"></script>
 </head>
 <body>
+  <div id="loader" class="loaderOverlay">
+    <div class="loaderSpinner"></div>
+    <div id="loaderText" class="loaderText">正在加载 3D 引擎和求解器...</div>
+  </div>
+
   <main class="app">
     <section class="stage" aria-label="3D 魔方舞台">
       <canvas id="cubeCanvas"></canvas>
@@ -295,6 +377,7 @@
         <button id="scrambleButton" class="secondary" type="button">打乱</button>
         <button id="solveButton" class="primary" type="button">复原</button>
         <button id="resetButton" type="button">重置</button>
+        <button id="undoButton" type="button" title="撤销上一步 (Ctrl+Z)">↩</button>
       </div>
 
       <div class="stats">
@@ -319,11 +402,19 @@
       <div id="status" class="status">正在加载 3D 引擎和求解器...</div>
 
       <div class="moves">
-        <h2>还原步骤</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <h2 style="margin:0">还原步骤</h2>
+          <div id="stepNav" class="stepNav" style="display:none">
+            <button id="stepPrevButton" type="button" title="上一步">⏮</button>
+            <button id="stepPlayButton" type="button" title="暂停/播放">⏸</button>
+            <button id="stepNextButton" type="button" title="下一步">⏭</button>
+          </div>
+        </div>
         <div id="moveList" class="moveList" aria-live="polite"></div>
       </div>
 
-      <p class="hint">提示：从边块或角块拖动更接近真实魔方手感；动画播放时会暂时锁定操作，避免状态错层。</p>
+      <p class="hint">提示：从边块或角块拖动更接近真实魔方手感；动画播放时会暂时锁定操作。<br>
+      快捷键：<span class="kbd">R</span><span class="kbd">U</span><span class="kbd">D</span><span class="kbd">L</span><span class="kbd">F</span><span class="kbd">B</span> 转层 · <span class="kbd">Shift</span>+键 逆时针 · <span class="kbd">Alt</span>+键 180° · <span class="kbd">Space</span> 打乱 · <span class="kbd">Enter</span> 复原 · <span class="kbd">Backspace</span> 重置 · <span class="kbd">Ctrl+Z</span> 撤销 · <span class="kbd">←↑↓→</span> 旋转视角</p>
     </aside>
   </main>
 
@@ -333,12 +424,19 @@
       scrambleButton: document.querySelector("#scrambleButton"),
       solveButton: document.querySelector("#solveButton"),
       resetButton: document.querySelector("#resetButton"),
+      undoButton: document.querySelector("#undoButton"),
       moveCount: document.querySelector("#moveCount"),
       solveCount: document.querySelector("#solveCount"),
       speedRange: document.querySelector("#speedRange"),
       speedLabel: document.querySelector("#speedLabel"),
       status: document.querySelector("#status"),
-      moveList: document.querySelector("#moveList")
+      moveList: document.querySelector("#moveList"),
+      stepNav: document.querySelector("#stepNav"),
+      stepPrevButton: document.querySelector("#stepPrevButton"),
+      stepPlayButton: document.querySelector("#stepPlayButton"),
+      stepNextButton: document.querySelector("#stepNextButton"),
+      loader: document.querySelector("#loader"),
+      loaderText: document.querySelector("#loaderText")
     };
 
     const HALF_PI = Math.PI / 2;
@@ -384,7 +482,12 @@
     let cubeModel;
     let solverReady = false;
     let isBusy = false;
+    let isSolving = false;
     let moveTotal = 0;
+    let moveHistory = [];
+    let solveSequence = [];
+    let solveStepIndex = -1;
+    let solvePaused = false;
     let activePointer = null;
     let orbit = { yaw: -Math.PI / 4, pitch: 0.56, distance: 7.4 };
     let cubelets = [];
@@ -399,14 +502,26 @@
     }
 
     function setControlsEnabled(enabled) {
-      ui.scrambleButton.disabled = !enabled || !solverReady;
-      ui.solveButton.disabled = !enabled || !solverReady;
-      ui.resetButton.disabled = !enabled;
+      ui.scrambleButton.disabled = !enabled || !solverReady || isSolving;
+      ui.solveButton.disabled = !enabled || !solverReady || isSolving;
+      ui.resetButton.disabled = !enabled || isSolving;
       ui.speedRange.disabled = !enabled && isBusy;
+      ui.undoButton.disabled = !enabled || isSolving || moveHistory.length === 0;
+      ui.stepPrevButton.disabled = solveStepIndex < 0;
+      ui.stepNextButton.disabled = solveStepIndex >= solveSequence.length - 1;
     }
 
     function waitFrame() {
       return new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+
+    function hideLoader() {
+      ui.loader.classList.add("hidden");
+      setTimeout(() => ui.loader.remove(), 500);
+    }
+
+    function updateLoaderText(text) {
+      ui.loaderText.textContent = text;
     }
 
     async function boot() {
@@ -415,6 +530,8 @@
           throw new Error("cubejs CDN 加载失败");
         }
 
+        updateLoaderText("正在加载 3D 引擎...");
+        await waitFrame();
         THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
         raycaster.current = new THREE.Raycaster();
         pointerNdc.current = new THREE.Vector2();
@@ -426,17 +543,20 @@
         resize();
 
         setControlsEnabled(false);
-        setStatus("正在初始化 Kociemba 两阶段求解器，首次加载需要几秒...");
+        updateLoaderText("正在初始化 Kociemba 两阶段求解器，首次加载需要几秒...");
+        setStatus("正在初始化求解器...");
         await waitFrame();
         window.Cube.initSolver();
         validateMoveDefinitions();
         solverReady = true;
         setControlsEnabled(true);
         setStatus("就绪。拖动魔方面转层，拖动空白处旋转视角。");
+        hideLoader();
       } catch (error) {
         console.error(error);
         setControlsEnabled(false);
         setStatus(`加载失败：${error.message}。请确认网络可以访问 CDN 后刷新页面。`, true);
+        updateLoaderText(`加载失败：${error.message}`);
       }
     }
 
@@ -594,9 +714,77 @@
       ui.scrambleButton.addEventListener("click", () => scrambleCube(24));
       ui.solveButton.addEventListener("click", runSolve);
       ui.resetButton.addEventListener("click", resetCube);
+      ui.undoButton.addEventListener("click", undoLastMove);
+      ui.stepPrevButton.addEventListener("click", stepSolvePrev);
+      ui.stepPlayButton.addEventListener("click", toggleSolvePause);
+      ui.stepNextButton.addEventListener("click", stepSolveNext);
       ui.speedRange.addEventListener("input", () => {
         ui.speedLabel.textContent = `${Number(ui.speedRange.value).toFixed(1)}x`;
       });
+      window.addEventListener("keydown", onKeyDown);
+    }
+
+    function onKeyDown(event) {
+      // Don't intercept when focus is on an input element
+      if (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.isContentEditable) {
+        return;
+      }
+
+      const key = event.key;
+      const ctrl = event.ctrlKey || event.metaKey;
+      const shift = event.shiftKey;
+      const alt = event.altKey;
+
+      // Ctrl+Z: Undo
+      if (ctrl && key.toLowerCase() === "z") {
+        event.preventDefault();
+        undoLastMove();
+        return;
+      }
+
+      // Arrow keys: orbit camera
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key)) {
+        event.preventDefault();
+        const step = 0.3;
+        if (key === "ArrowLeft") orbit.yaw -= step;
+        if (key === "ArrowRight") orbit.yaw += step;
+        if (key === "ArrowUp") orbit.pitch += step;
+        if (key === "ArrowDown") orbit.pitch -= step;
+        updateCamera();
+        return;
+      }
+
+      // Space: scramble
+      if (key === " ") {
+        event.preventDefault();
+        scrambleCube(24);
+        return;
+      }
+
+      // Enter: solve
+      if (key === "Enter") {
+        event.preventDefault();
+        runSolve();
+        return;
+      }
+
+      // Backspace/Delete: reset
+      if (key === "Backspace" || key === "Delete") {
+        event.preventDefault();
+        resetCube();
+        return;
+      }
+
+      // Face moves: R U D L F B
+      const upperKey = key.toUpperCase();
+      if (MOVES.includes(upperKey)) {
+        event.preventDefault();
+        if (isBusy || isSolving) return;
+        let suffix = "";
+        if (alt) suffix = "2";
+        else if (shift) suffix = "'";
+        applyMove(upperKey + suffix, { animate: true, updateModel: true });
+      }
     }
 
     function resize() {
@@ -631,7 +819,7 @@
     }
 
     function onPointerDown(event) {
-      if (isBusy || event.button !== 0) return;
+      if (isBusy || isSolving || event.button !== 0) return;
       ui.canvas.setPointerCapture(event.pointerId);
       ui.canvas.classList.add("dragging");
 
@@ -768,7 +956,7 @@
     }
 
     async function applyMove(move, options = {}) {
-      const { animate: shouldAnimate = true, updateModel = true, countMove = true } = options;
+      const { animate: shouldAnimate = true, updateModel = true, countMove = true, recordHistory = true } = options;
       if (isBusy) return false;
       const parsed = parseMove(move);
       if (!parsed) return false;
@@ -782,7 +970,10 @@
           moveTotal += 1;
           ui.moveCount.textContent = String(moveTotal);
         }
-        if (cubeModel.isSolved()) {
+        if (recordHistory && !isSolving) {
+          moveHistory.push(move);
+        }
+        if (cubeModel.isSolved() && !isSolving) {
           setStatus("魔方已复原。");
         }
       } finally {
@@ -876,15 +1067,21 @@
     }
 
     async function scrambleCube(count = 24) {
-      if (isBusy || !solverReady) return;
+      if (isBusy || isSolving || !solverReady) return;
       const sequence = randomScramble(count);
       ui.moveList.innerHTML = "";
       ui.solveCount.textContent = "0";
+      ui.stepNav.style.display = "none";
+      solveSequence = [];
+      solveStepIndex = -1;
+      solvePaused = false;
       setStatus("正在打乱...");
       for (const move of sequence) {
         await applyMove(move, { animate: true, updateModel: true, countMove: true });
       }
+      moveHistory = [];
       setStatus(`已打乱：${sequence.join(" ")}`);
+      setControlsEnabled(true);
     }
 
     function randomScramble(count) {
@@ -902,37 +1099,192 @@
     }
 
     async function runSolve() {
-      if (isBusy || !solverReady) return;
-      if (cubeModel.isSolved()) {
+      if (isBusy || (isSolving && !solvePaused) || !solverReady) return;
+      if (cubeModel.isSolved() && !solvePaused) {
         setStatus("已经是复原状态。");
         return;
       }
 
-      isBusy = true;
+      // If we're resuming a paused solve
+      if (isSolving && solvePaused) {
+        solvePaused = false;
+        setStatus("继续播放还原动画...");
+        updateSolvePlayButton();
+        setControlsEnabled(true);
+        await playSolveFrom(solveStepIndex + 1);
+        if (!solvePaused) finishSolve();
+        return;
+      }
+
+      isSolving = true;
+      solvePaused = false;
       setControlsEnabled(false);
       try {
         setStatus("正在计算实用短解...");
         await waitFrame();
         const solution = solveCube();
+        solveSequence = solution;
+        solveStepIndex = -1;
         renderMoveList(solution);
         ui.solveCount.textContent = String(solution.length);
+        ui.stepNav.style.display = "flex";
+        updateSolvePlayButton();
         setStatus(`找到 ${solution.length} 步解法，开始还原动画。`);
-
-        for (let i = 0; i < solution.length; i += 1) {
-          markActiveMove(i);
-          isBusy = false;
-          await applyMove(solution[i], { animate: true, updateModel: true, countMove: true });
-          isBusy = true;
-        }
-        markActiveMove(-1);
-        setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束，但状态未完全复原。");
+        setControlsEnabled(true);
+        await playSolveFrom(0);
       } catch (error) {
         console.error(error);
         setStatus(`求解失败：${error.message}`, true);
+        solvePaused = false;
       } finally {
-        isBusy = false;
+        if (!solvePaused) {
+          isSolving = false;
+        }
         setControlsEnabled(true);
       }
+    }
+
+    async function playSolveFrom(startIndex) {
+      for (let i = startIndex; i < solveSequence.length; i += 1) {
+        if (solvePaused) {
+          solveStepIndex = i - 1;
+          return;
+        }
+        solveStepIndex = i;
+        markActiveMove(i);
+        setControlsEnabled(true);
+        await applyMove(solveSequence[i], { animate: true, updateModel: true, countMove: true });
+        if (solvePaused && i < solveSequence.length - 1) {
+          solveStepIndex = i;
+          return;
+        }
+      }
+      // Completed
+      solveStepIndex = solveSequence.length - 1;
+      markActiveMove(-1);
+      setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束，但状态未完全复原。");
+      finishSolve();
+    }
+
+    function finishSolve() {
+      solvePaused = false;
+      isSolving = false;
+      setControlsEnabled(true);
+      updateSolvePlayButton();
+    }
+
+    function updateSolvePlayButton() {
+      ui.stepPlayButton.textContent = solvePaused ? "▶" : "⏸";
+    }
+
+    async function toggleSolvePause() {
+      if (solveSequence.length === 0) return;
+      solvePaused = !solvePaused;
+      updateSolvePlayButton();
+
+      if (!solvePaused) {
+        // Resuming
+        setStatus("继续播放还原动画...");
+        setControlsEnabled(true);
+        await playSolveFrom(solveStepIndex + 1);
+        if (solveStepIndex >= solveSequence.length - 1 && !solvePaused) {
+          finishSolve();
+        }
+      } else {
+        setStatus("动画已暂停。");
+      }
+    }
+
+    async function stepSolveNext() {
+      if (solveSequence.length === 0) return;
+      if (solveStepIndex >= solveSequence.length - 1) return;
+
+      // If we were auto-playing, pause first
+      if (!solvePaused) {
+        solvePaused = true;
+        updateSolvePlayButton();
+      }
+
+      const nextIndex = solveStepIndex + 1;
+      solveStepIndex = nextIndex;
+      markActiveMove(nextIndex);
+      setControlsEnabled(true);
+      await applyMove(solveSequence[nextIndex], { animate: true, updateModel: true, countMove: true });
+
+      if (nextIndex >= solveSequence.length - 1) {
+        markActiveMove(-1);
+        setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束。");
+        finishSolve();
+      } else {
+        setStatus(`步骤 ${nextIndex + 1}/${solveSequence.length} — 已暂停`);
+      }
+    }
+
+    async function stepSolvePrev() {
+      if (solveSequence.length === 0) return;
+      if (solveStepIndex < 0) return;
+
+      // Pause if playing
+      if (!solvePaused) {
+        solvePaused = true;
+        updateSolvePlayButton();
+      }
+
+      const currentMove = solveSequence[solveStepIndex];
+      const inverse = invertMove(currentMove);
+      if (!inverse) return;
+
+      solveStepIndex -= 1;
+      setControlsEnabled(true);
+      await applyMove(inverse, { animate: true, updateModel: true, countMove: false, recordHistory: false });
+      // Decrement move total since we're going backward
+      moveTotal = Math.max(0, moveTotal - 1);
+      ui.moveCount.textContent = String(moveTotal);
+
+      if (solveStepIndex >= 0) {
+        markActiveMove(solveStepIndex);
+        setStatus(`步骤 ${solveStepIndex + 1}/${solveSequence.length} — 已暂停`);
+      } else {
+        markActiveMove(-1);
+        setStatus("已回退到求解开始状态。");
+      }
+    }
+
+    async function navigateToSolveStep(targetIndex) {
+      if (solveSequence.length === 0 || isBusy) return;
+      if (targetIndex < -1 || targetIndex >= solveSequence.length) return;
+
+      // Pause auto-play
+      if (!solvePaused) {
+        solvePaused = true;
+        updateSolvePlayButton();
+      }
+
+      if (targetIndex > solveStepIndex) {
+        // Go forward
+        for (let i = solveStepIndex + 1; i <= targetIndex; i += 1) {
+          solveStepIndex = i;
+          markActiveMove(i);
+          await applyMove(solveSequence[i], { animate: true, updateModel: true, countMove: true });
+        }
+      } else if (targetIndex < solveStepIndex) {
+        // Go backward
+        for (let i = solveStepIndex; i > targetIndex; i -= 1) {
+          const inverse = invertMove(solveSequence[i]);
+          if (!inverse) continue;
+          solveStepIndex = i - 1;
+          await applyMove(inverse, { animate: true, updateModel: true, countMove: false, recordHistory: false });
+          moveTotal = Math.max(0, moveTotal - 1);
+          ui.moveCount.textContent = String(moveTotal);
+          if (solveStepIndex >= 0) {
+            markActiveMove(solveStepIndex);
+          } else {
+            markActiveMove(-1);
+          }
+        }
+      }
+
+      setStatus(`跳转到步骤 ${targetIndex + 1}/${solveSequence.length} — 已暂停`);
     }
 
     function solveCube() {
@@ -1079,10 +1431,12 @@
 
     function renderMoveList(moves) {
       ui.moveList.innerHTML = "";
-      moves.forEach((move) => {
+      moves.forEach((move, index) => {
         const pill = document.createElement("span");
-        pill.className = "movePill";
+        pill.className = "movePill clickable";
         pill.textContent = move;
+        pill.title = `步骤 ${index + 1}: ${move}（点击跳转）`;
+        pill.addEventListener("click", () => navigateToSolveStep(index));
         ui.moveList.appendChild(pill);
       });
     }
@@ -1090,15 +1444,40 @@
     function markActiveMove(index) {
       [...ui.moveList.children].forEach((child, childIndex) => {
         child.classList.toggle("active", childIndex === index);
+        child.classList.toggle("done", childIndex < index && index >= 0);
       });
       const active = ui.moveList.children[index];
       if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
 
     function resetCube() {
-      if (isBusy) return;
+      if (isBusy || isSolving) return;
       createCube();
+      moveHistory = [];
+      solveSequence = [];
+      solveStepIndex = -1;
+      solvePaused = false;
+      ui.stepNav.style.display = "none";
       setStatus("已重置为复原状态。");
+      setControlsEnabled(true);
+    }
+
+    function invertMove(move) {
+      const parsed = parseMove(move);
+      if (!parsed) return null;
+      if (parsed.suffix === "2") return move;
+      if (parsed.suffix === "'") return parsed.face;
+      return parsed.face + "'";
+    }
+
+    async function undoLastMove() {
+      if (isBusy || isSolving || moveHistory.length === 0) return;
+      const lastMove = moveHistory.pop();
+      const inverse = invertMove(lastMove);
+      if (!inverse) return;
+      setStatus(`撤销：${lastMove} → ${inverse}`);
+      await applyMove(inverse, { animate: true, updateModel: true, countMove: true, recordHistory: false });
+      setStatus(moveHistory.length ? `已撤销，剩余 ${moveHistory.length} 步可回退` : "已回退至初始状态。");
       setControlsEnabled(true);
     }
 
