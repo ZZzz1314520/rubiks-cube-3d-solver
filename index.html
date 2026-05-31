@@ -95,7 +95,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -330,6 +330,28 @@
       background: rgba(255,255,255,0.06);
     }
 
+    select {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: inherit;
+      padding: 0 10px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+    select:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+    select:disabled {
+      cursor: not-allowed;
+      color: #6f7788;
+      background: #181b22;
+    }
+
     @media (max-width: 840px) {
       body {
         overflow: auto;
@@ -353,9 +375,23 @@
         left: 16px;
       }
     }
+
+    /* Palette and paint tools */
+    .paletteColor {
+      height: 34px;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .paletteColor:hover {
+      transform: scale(1.08);
+    }
+    .paletteColor.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js" onerror="window.__cubeCdnFailed = true"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js" onerror="window.__cubeCdnFailed = true"></script>
 </head>
 <body>
   <div id="loader" class="loaderOverlay">
@@ -378,6 +414,30 @@
         <button id="solveButton" class="primary" type="button">复原</button>
         <button id="resetButton" type="button">重置</button>
         <button id="undoButton" type="button" title="撤销上一步 (Ctrl+Z)">↩</button>
+        <button id="redoButton" type="button" title="重做上一步 (Ctrl+Y)">↪</button>
+      </div>
+
+      <!-- Paint Mode Toggle Button -->
+      <button id="paintModeButton" style="width: 100%; height: 42px; margin-bottom: 8px;" type="button">🎨 开启手动涂色复原</button>
+
+      <!-- Paint Palette Panel -->
+      <div id="paintPanel" class="control" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 8px;">
+        <span style="font-size: 13px; color: var(--muted);">选择颜色后点击贴纸（中心块已锁定）：</span>
+        <div id="colorPalette" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 4px 0;">
+          <button class="paletteColor active" data-color="U" style="background-color: #f4f7fb;" type="button" title="白色 (U)"></button>
+          <button class="paletteColor" data-color="D" style="background-color: #f5d547;" type="button" title="黄色 (D)"></button>
+          <button class="paletteColor" data-color="R" style="background-color: #d83b32;" type="button" title="红色 (R)"></button>
+          <button class="paletteColor" data-color="L" style="background-color: #f28c28;" type="button" title="橙色 (L)"></button>
+          <button class="paletteColor" data-color="F" style="background-color: #2eb872;" type="button" title="绿色 (F)"></button>
+          <button class="paletteColor" data-color="B" style="background-color: #2878d7;" type="button" title="蓝色 (B)"></button>
+        </div>
+        <button id="paintSolveButton" class="primary" style="width: 100%; height: 38px; margin-top: 4px;" type="button">验证并求解魔方</button>
+      </div>
+
+      <div id="timerCard" class="control" style="text-align: center; padding: 18px 0; margin-bottom: 6px;">
+        <span style="display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px;">复原计时器</span>
+        <strong id="timerDisplay" style="font-size: 38px; font-family: monospace; font-weight: 800; color: var(--text); display: block; line-height: 1;">0.00</strong>
+        <span id="timerStatus" style="font-size: 11px; color: var(--muted); display: block; margin-top: 6px;">打乱魔方后，手动转层将自动开始计时</span>
       </div>
 
       <div class="stats">
@@ -399,6 +459,24 @@
         <input id="speedRange" type="range" min="0.5" max="2.2" value="1" step="0.1">
       </div>
 
+      <div class="control">
+        <label for="patternSelect">
+          <span>经典花样</span>
+        </label>
+        <select id="patternSelect" style="margin-top: 8px;">
+          <option value="" disabled selected>选择经典花样...</option>
+          <option value="U2 D2 R2 L2 F2 B2">棋盘格 (Checkerboard)</option>
+          <option value="U D' R L' F B' U' D">六面点 (Six Spots)</option>
+          <option value="F2 B2 U D' R2 L2 U D'">四面点 (Four Spots)</option>
+          <option value="U F B' L2 U2 L2 F' B U2 L2 U">六面十字 (Six Crosses)</option>
+          <option value="F U F' U' L' B' L B">六面彩条 (Six Stripes)</option>
+          <option value="F L F U' R U F2 L2 U' L' B D' B' L2 U">大套小魔方 (Cube in a Cube)</option>
+          <option value="U' L' U' F' R2 B' R F U B2 U B' L U' F U R F'">大中小魔方 (Cube in Cube in Cube)</option>
+          <option value="L U B' U' R L' B R' F B' D R D' F'">小蟒蛇 (Anaconda)</option>
+          <option value="F2 R2 B2 U2 F2 R2 B2 D2">大巨蟒 (Python)</option>
+        </select>
+      </div>
+
       <div id="status" class="status">正在加载 3D 引擎和求解器...</div>
 
       <div class="moves">
@@ -414,7 +492,7 @@
       </div>
 
       <p class="hint">提示：从边块或角块拖动更接近真实魔方手感；动画播放时会暂时锁定操作。<br>
-      快捷键：<span class="kbd">R</span><span class="kbd">U</span><span class="kbd">D</span><span class="kbd">L</span><span class="kbd">F</span><span class="kbd">B</span> 转层 · <span class="kbd">Shift</span>+键 逆时针 · <span class="kbd">Alt</span>+键 180° · <span class="kbd">Space</span> 打乱 · <span class="kbd">Enter</span> 复原 · <span class="kbd">Backspace</span> 重置 · <span class="kbd">Ctrl+Z</span> 撤销 · <span class="kbd">←↑↓→</span> 旋转视角</p>
+      快捷键：<span class="kbd">R</span><span class="kbd">U</span><span class="kbd">D</span><span class="kbd">L</span><span class="kbd">F</span><span class="kbd">B</span> 转层 · <span class="kbd">Shift</span>+键 逆时针 · <span class="kbd">Alt</span>+键 180° · <span class="kbd">Space</span> 打乱 · <span class="kbd">Enter</span> 复原 · <span class="kbd">Backspace</span> 重置 · <span class="kbd">Ctrl+Z</span> 撤销 · <span class="kbd">Ctrl+Y</span> 重做 · <span class="kbd">←↑↓→</span> 旋转视角</p>
     </aside>
   </main>
 
@@ -425,10 +503,12 @@
       solveButton: document.querySelector("#solveButton"),
       resetButton: document.querySelector("#resetButton"),
       undoButton: document.querySelector("#undoButton"),
+      redoButton: document.querySelector("#redoButton"),
       moveCount: document.querySelector("#moveCount"),
       solveCount: document.querySelector("#solveCount"),
       speedRange: document.querySelector("#speedRange"),
       speedLabel: document.querySelector("#speedLabel"),
+      patternSelect: document.querySelector("#patternSelect"),
       status: document.querySelector("#status"),
       moveList: document.querySelector("#moveList"),
       stepNav: document.querySelector("#stepNav"),
@@ -436,13 +516,20 @@
       stepPlayButton: document.querySelector("#stepPlayButton"),
       stepNextButton: document.querySelector("#stepNextButton"),
       loader: document.querySelector("#loader"),
-      loaderText: document.querySelector("#loaderText")
+      loaderText: document.querySelector("#loaderText"),
+      timerDisplay: document.querySelector("#timerDisplay"),
+      timerStatus: document.querySelector("#timerStatus"),
+      paintModeButton: document.querySelector("#paintModeButton"),
+      paintPanel: document.querySelector("#paintPanel"),
+      paintSolveButton: document.querySelector("#paintSolveButton")
     };
 
     const HALF_PI = Math.PI / 2;
     const CUBE_GAP = 1.08;
     const CUBELET_SIZE = 0.98;
+    const DRAG_PREVIEW_THRESHOLD = 8;
     const DRAG_THRESHOLD = 18;
+    const HIGHLIGHT_COLOR = 0x44c7a6;
     const FACE_COLORS = {
       U: 0xf4f7fb,
       D: 0xf5d547,
@@ -451,6 +538,28 @@
       F: 0x2eb872,
       B: 0x2878d7
     };
+    const CUBE_SCRIPT_SOURCES = [
+      {
+        name: "Local",
+        cube: "./lib/cube.js",
+        solve: "./lib/solve.js"
+      },
+      {
+        name: "jsDelivr",
+        cube: "https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js",
+        solve: "https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js"
+      },
+      {
+        name: "unpkg",
+        cube: "https://unpkg.com/cubejs@1.3.2/lib/cube.js",
+        solve: "https://unpkg.com/cubejs@1.3.2/lib/solve.js"
+      }
+    ];
+    const THREE_MODULE_SOURCES = [
+      { name: "Local", url: "./lib/three.module.js" },
+      { name: "jsDelivr", url: "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" },
+      { name: "unpkg", url: "https://unpkg.com/three@0.160.0/build/three.module.js" }
+    ];
 
     const FACE_DATA = {
       U: { axis: "y", axisIndex: 1, layer: 1, baseAngle: -HALF_PI },
@@ -485,13 +594,32 @@
     let isSolving = false;
     let moveTotal = 0;
     let moveHistory = [];
+    let redoHistory = [];
     let solveSequence = [];
     let solveStepIndex = -1;
     let solvePaused = false;
+    let solveNavigationBusy = false;
     let activePointer = null;
     let orbit = { yaw: -Math.PI / 4, pitch: 0.56, distance: 7.4 };
     let cubelets = [];
     let hitTargets = [];
+    let layerHighlight = null;
+
+    let timerInterval = null;
+    let timerStartTime = 0;
+    let timerRunning = false;
+    let timerReadyToStart = false;
+
+    let isPainting = false;
+    let selectedPaintColor = "U";
+    const FACE_NAMES_ZH = {
+      U: "白色",
+      D: "黄色",
+      R: "红色",
+      L: "橙色",
+      F: "绿色",
+      B: "蓝色"
+    };
 
     const raycaster = { current: null };
     const pointerNdc = { current: null };
@@ -502,13 +630,18 @@
     }
 
     function setControlsEnabled(enabled) {
-      ui.scrambleButton.disabled = !enabled || !solverReady || isSolving;
-      ui.solveButton.disabled = !enabled || !solverReady || isSolving;
+      ui.scrambleButton.disabled = !enabled || !solverReady || isSolving || isPainting;
+      ui.solveButton.disabled = !enabled || !solverReady || isSolving || isPainting;
       ui.resetButton.disabled = !enabled || isSolving;
       ui.speedRange.disabled = !enabled && isBusy;
-      ui.undoButton.disabled = !enabled || isSolving || moveHistory.length === 0;
-      ui.stepPrevButton.disabled = solveStepIndex < 0;
-      ui.stepNextButton.disabled = solveStepIndex >= solveSequence.length - 1;
+      ui.patternSelect.disabled = !enabled || isSolving || isBusy || isPainting;
+      ui.undoButton.disabled = !enabled || isSolving || isPainting || moveHistory.length === 0;
+      ui.redoButton.disabled = !enabled || isSolving || isPainting || redoHistory.length === 0;
+      ui.paintModeButton.disabled = !enabled || isSolving || isBusy;
+      ui.paintSolveButton.disabled = !enabled || !isPainting || isBusy || isSolving;
+      ui.stepPrevButton.disabled = isBusy || solveNavigationBusy || solveStepIndex < 0;
+      ui.stepPlayButton.disabled = solveNavigationBusy || solveSequence.length === 0 || (isBusy && solvePaused);
+      ui.stepNextButton.disabled = isBusy || solveNavigationBusy || solveStepIndex >= solveSequence.length - 1;
     }
 
     function waitFrame() {
@@ -526,13 +659,12 @@
 
     async function boot() {
       try {
-        if (window.__cubeCdnFailed || !window.Cube) {
-          throw new Error("cubejs CDN 加载失败");
-        }
+        updateLoaderText("正在加载求解器...");
+        await loadCubeLibraries();
 
         updateLoaderText("正在加载 3D 引擎...");
         await waitFrame();
-        THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+        THREE = await importFromSources(THREE_MODULE_SOURCES, "Three.js");
         raycaster.current = new THREE.Raycaster();
         pointerNdc.current = new THREE.Vector2();
 
@@ -558,6 +690,55 @@
         setStatus(`加载失败：${error.message}。请确认网络可以访问 CDN 后刷新页面。`, true);
         updateLoaderText(`加载失败：${error.message}`);
       }
+    }
+
+    function hasCubeSolver() {
+      return Boolean(window.Cube && typeof window.Cube.initSolver === "function");
+    }
+
+    async function loadCubeLibraries() {
+      if (hasCubeSolver()) return;
+
+      let lastError = null;
+      for (const source of CUBE_SCRIPT_SOURCES) {
+        try {
+          updateLoaderText(`正在从 ${source.name} 加载求解器...`);
+          await loadScript(source.cube);
+          await loadScript(source.solve);
+          if (hasCubeSolver()) return;
+          throw new Error(`${source.name} 返回的 cubejs 不完整`);
+        } catch (error) {
+          lastError = error;
+          console.warn(`cubejs 加载失败，切换下一个源：${source.name}`, error);
+        }
+      }
+
+      throw new Error(`cubejs 加载失败${lastError ? `：${lastError.message}` : ""}`);
+    }
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(src));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function importFromSources(sources, label) {
+      let lastError = null;
+      for (const source of sources) {
+        try {
+          updateLoaderText(`正在从 ${source.name} 加载 ${label}...`);
+          return await import(source.url);
+        } catch (error) {
+          lastError = error;
+          console.warn(`${label} 加载失败，切换下一个源：${source.name}`, error);
+        }
+      }
+      throw new Error(`${label} 加载失败${lastError ? `：${lastError.message}` : ""}`);
     }
 
     function initScene() {
@@ -627,11 +808,25 @@
 
       const bodyGeometry = new THREE.BoxGeometry(CUBELET_SIZE, CUBELET_SIZE, CUBELET_SIZE);
       const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: 0x10141b,
-        roughness: 0.56,
-        metalness: 0.04
+        color: 0x0f1115,
+        roughness: 0.7,
+        metalness: 0.1
       });
-      const stickerGeometry = new THREE.PlaneGeometry(0.78, 0.78);
+
+      // Create rounded rectangle shape for stickers
+      const w = 0.78;
+      const r = 0.12;
+      const shape = new THREE.Shape();
+      shape.moveTo(-w/2 + r, -w/2);
+      shape.lineTo(w/2 - r, -w/2);
+      shape.quadraticCurveTo(w/2, -w/2, w/2, -w/2 + r);
+      shape.lineTo(w/2, w/2 - r);
+      shape.quadraticCurveTo(w/2, w/2, w/2 - r, w/2);
+      shape.lineTo(-w/2 + r, w/2);
+      shape.quadraticCurveTo(-w/2, w/2, -w/2, w/2 - r);
+      shape.lineTo(-w/2, -w/2 + r);
+      shape.quadraticCurveTo(-w/2, -w/2, -w/2 + r, -w/2);
+      const stickerGeometry = new THREE.ShapeGeometry(shape);
 
       for (let x = -1; x <= 1; x += 1) {
         for (let y = -1; y <= 1; y += 1) {
@@ -672,8 +867,10 @@
       if (!shouldAdd) return;
       const material = new THREE.MeshStandardMaterial({
         color: FACE_COLORS[face],
-        roughness: 0.42,
-        metalness: 0.02,
+        roughness: 0.22,
+        metalness: 0.05,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.1,
         side: THREE.DoubleSide
       });
       const sticker = new THREE.Mesh(geometry, material);
@@ -699,6 +896,8 @@
       }
 
       sticker.userData.cubelet = group;
+      sticker.userData.face = face;
+      sticker.userData.paintColor = face;
       sticker.castShadow = true;
       group.add(sticker);
       hitTargets.push(sticker);
@@ -715,11 +914,29 @@
       ui.solveButton.addEventListener("click", runSolve);
       ui.resetButton.addEventListener("click", resetCube);
       ui.undoButton.addEventListener("click", undoLastMove);
+      ui.redoButton.addEventListener("click", redoLastMove);
       ui.stepPrevButton.addEventListener("click", stepSolvePrev);
       ui.stepPlayButton.addEventListener("click", toggleSolvePause);
       ui.stepNextButton.addEventListener("click", stepSolveNext);
       ui.speedRange.addEventListener("input", () => {
         ui.speedLabel.textContent = `${Number(ui.speedRange.value).toFixed(1)}x`;
+      });
+      ui.patternSelect.addEventListener("change", (e) => {
+        if (e.target.value) {
+          applyPattern(e.target.value);
+        }
+      });
+      ui.paintModeButton.addEventListener("click", togglePaintMode);
+      ui.paintSolveButton.addEventListener("click", handlePaintSolve);
+      
+      document.querySelectorAll(".paletteColor").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".paletteColor").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          const color = btn.getAttribute("data-color");
+          selectedPaintColor = color;
+          setStatus(`已选择 ${FACE_NAMES_ZH[color]} 涂色。`);
+        });
       });
       window.addEventListener("keydown", onKeyDown);
     }
@@ -739,6 +956,13 @@
       if (ctrl && key.toLowerCase() === "z") {
         event.preventDefault();
         undoLastMove();
+        return;
+      }
+      
+      // Ctrl+Y: Redo
+      if (ctrl && key.toLowerCase() === "y") {
+        event.preventDefault();
+        redoLastMove();
         return;
       }
 
@@ -820,6 +1044,29 @@
 
     function onPointerDown(event) {
       if (isBusy || isSolving || event.button !== 0) return;
+      
+      if (isPainting) {
+        const hit = pick(event);
+        if (hit && hit.object && hit.object.userData.face !== undefined) {
+          paintSticker(hit);
+          return;
+        }
+        ui.canvas.setPointerCapture(event.pointerId);
+        ui.canvas.classList.add("dragging");
+        activePointer = {
+          id: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          mode: "orbit",
+          hit: null,
+          previewMove: null,
+          consumed: false
+        };
+        return;
+      }
+      
       ui.canvas.setPointerCapture(event.pointerId);
       ui.canvas.classList.add("dragging");
 
@@ -832,12 +1079,42 @@
         lastY: event.clientY,
         mode: hit ? "cube" : "orbit",
         hit,
+        previewMove: null,
         consumed: false
       };
+      if (hit) showLayerPreview(hit, null);
     }
 
     function onPointerMove(event) {
-      if (!activePointer || activePointer.id !== event.pointerId) return;
+      if (!activePointer) {
+        if (!isBusy && !isSolving) {
+          const hit = pick(event);
+          if (hit) {
+            if (isPainting) {
+              if (hit.object && hit.object.userData.face !== undefined) {
+                if (!isCenterCubelet(hit.cubelet.userData.coord)) {
+                  ui.canvas.style.cursor = "pointer";
+                } else {
+                  ui.canvas.style.cursor = "not-allowed";
+                }
+              } else {
+                ui.canvas.style.cursor = "grab";
+              }
+            } else {
+              showLayerPreview(hit, null);
+              ui.canvas.style.cursor = "pointer";
+            }
+          } else {
+            clearLayerHighlight();
+            ui.canvas.style.cursor = "grab";
+          }
+        } else {
+          clearLayerHighlight();
+          ui.canvas.style.cursor = "default";
+        }
+        return;
+      }
+      if (activePointer.id !== event.pointerId) return;
       const dx = event.clientX - activePointer.lastX;
       const dy = event.clientY - activePointer.lastY;
       activePointer.lastX = event.clientX;
@@ -853,10 +1130,19 @@
       if (activePointer.consumed) return;
       const totalDx = event.clientX - activePointer.startX;
       const totalDy = event.clientY - activePointer.startY;
-      if (Math.hypot(totalDx, totalDy) < DRAG_THRESHOLD) return;
+      const distance = Math.hypot(totalDx, totalDy);
+      if (distance >= DRAG_PREVIEW_THRESHOLD) {
+        const previewMove = inferMoveFromDrag(activePointer.hit, totalDx, totalDy);
+        if (previewMove !== activePointer.previewMove) {
+          activePointer.previewMove = previewMove;
+          showLayerPreview(activePointer.hit, previewMove);
+        }
+      }
+      if (distance < DRAG_THRESHOLD) return;
 
-      const move = inferMoveFromDrag(activePointer.hit, totalDx, totalDy);
+      const move = activePointer.previewMove || inferMoveFromDrag(activePointer.hit, totalDx, totalDy);
       activePointer.consumed = true;
+      clearLayerHighlight();
       if (move) {
         applyMove(move, { animate: true, updateModel: true });
       } else {
@@ -867,7 +1153,9 @@
     function onPointerUp(event) {
       if (!activePointer || activePointer.id !== event.pointerId) return;
       activePointer = null;
+      clearLayerHighlight();
       ui.canvas.classList.remove("dragging");
+      ui.canvas.style.cursor = "grab";
     }
 
     function pick(event) {
@@ -884,9 +1172,68 @@
       const normal = first.face.normal.clone().transformDirection(first.object.matrixWorld);
       const snappedNormal = snapVector(normal);
       return {
+        object: first.object,
         cubelet: first.object.userData.cubelet,
         normal: snappedNormal,
         point: first.point.clone()
+      };
+    }
+
+    function showLayerPreview(hit, moveName) {
+      const parsed = moveName ? parseMove(moveName) : layerFromHit(hit);
+      if (!parsed) {
+        clearLayerHighlight();
+        return;
+      }
+
+      if (
+        layerHighlight &&
+        layerHighlight.axisIndex === parsed.axisIndex &&
+        layerHighlight.layer === parsed.layer
+      ) {
+        return;
+      }
+
+      clearLayerHighlight();
+      layerHighlight = {
+        axisIndex: parsed.axisIndex,
+        axis: parsed.axis,
+        layer: parsed.layer,
+        materials: []
+      };
+
+      const isDragging = activePointer && activePointer.mode === "cube";
+      const highlightIntensity = isDragging ? 0.38 : 0.15;
+
+      cubelets.forEach((cubelet) => {
+        const coord = cubelet.userData.coord;
+        if (Math.round(coord[parsed.axis]) !== parsed.layer) return;
+        cubelet.traverse((child) => {
+          if (!child.isMesh || !child.material || child.userData.face === undefined) return;
+          layerHighlight.materials.push({ mesh: child, emissive: child.material.emissive.clone(), emissiveIntensity: child.material.emissiveIntensity });
+          child.material.emissive.setHex(HIGHLIGHT_COLOR);
+          child.material.emissiveIntensity = highlightIntensity;
+        });
+      });
+    }
+
+    function clearLayerHighlight() {
+      if (!layerHighlight) return;
+      layerHighlight.materials.forEach(({ mesh, emissive, emissiveIntensity }) => {
+        if (!mesh.material) return;
+        mesh.material.emissive.copy(emissive);
+        mesh.material.emissiveIntensity = emissiveIntensity;
+      });
+      layerHighlight = null;
+    }
+
+    function layerFromHit(hit) {
+      const axisIndex = dominantAxis(hit.normal);
+      const layer = Math.sign(hit.normal.getComponent(axisIndex)) || 1;
+      return {
+        axis: AXIS_NAMES[axisIndex],
+        axisIndex,
+        layer
       };
     }
 
@@ -956,7 +1303,7 @@
     }
 
     async function applyMove(move, options = {}) {
-      const { animate: shouldAnimate = true, updateModel = true, countMove = true, recordHistory = true } = options;
+      const { animate: shouldAnimate = true, updateModel = true, countMove = true, recordHistory = true, clearRedo = recordHistory } = options;
       if (isBusy) return false;
       const parsed = parseMove(move);
       if (!parsed) return false;
@@ -972,10 +1319,20 @@
         }
         if (recordHistory && !isSolving) {
           moveHistory.push(move);
+          if (clearRedo) {
+            redoHistory = [];
+          }
+          if (timerReadyToStart) {
+            startTimer();
+          }
         }
         if (cubeModel.isSolved() && !isSolving) {
           setStatus("魔方已复原。");
+          if (timerRunning) {
+            stopTimer(true);
+          }
         }
+        assertVisualState("move", move);
       } finally {
         isBusy = false;
         setControlsEnabled(true);
@@ -1068,6 +1425,12 @@
 
     async function scrambleCube(count = 24) {
       if (isBusy || isSolving || !solverReady) return;
+      stopTimer(false);
+      ui.timerDisplay.textContent = "0.00";
+      ui.timerStatus.textContent = "已打乱，转动第一步将自动计时";
+      ui.timerStatus.style.color = "var(--accent-2)";
+      timerReadyToStart = true;
+
       const sequence = randomScramble(count);
       ui.moveList.innerHTML = "";
       ui.solveCount.textContent = "0";
@@ -1075,13 +1438,43 @@
       solveSequence = [];
       solveStepIndex = -1;
       solvePaused = false;
+      solveNavigationBusy = false;
       setStatus("正在打乱...");
       for (const move of sequence) {
         await applyMove(move, { animate: true, updateModel: true, countMove: true });
       }
+      assertVisualState("scramble");
       moveHistory = [];
+      redoHistory = [];
       setStatus(`已打乱：${sequence.join(" ")}`);
       setControlsEnabled(true);
+    }
+
+    async function applyPattern(movesString) {
+      if (isBusy || isSolving) return;
+      stopTimer(false);
+      timerReadyToStart = false;
+      resetCube();
+      const sequence = movesString.trim().split(/\s+/);
+      setStatus("正在演示花样公式...");
+      isSolving = true;
+      setControlsEnabled(false);
+      try {
+        for (const move of sequence) {
+          if (isBusy) await new Promise(r => setTimeout(r, 50));
+          const success = await applyMove(move, { animate: true, updateModel: true, countMove: true });
+          if (!success) break;
+          const delay = Math.max(50, 200 / Number(ui.speedRange.value));
+          await new Promise(r => setTimeout(r, delay));
+        }
+        setStatus("花样演示完成！您可以尝试手动复原它。");
+      } catch (err) {
+        console.error(err);
+      } finally {
+        isSolving = false;
+        setControlsEnabled(true);
+        ui.patternSelect.value = "";
+      }
     }
 
     function randomScramble(count) {
@@ -1100,6 +1493,8 @@
 
     async function runSolve() {
       if (isBusy || (isSolving && !solvePaused) || !solverReady) return;
+      stopTimer(false);
+      timerReadyToStart = false;
       if (cubeModel.isSolved() && !solvePaused) {
         setStatus("已经是复原状态。");
         return;
@@ -1136,6 +1531,7 @@
         console.error(error);
         setStatus(`求解失败：${error.message}`, true);
         solvePaused = false;
+        solveNavigationBusy = false;
       } finally {
         if (!solvePaused) {
           isSolving = false;
@@ -1162,6 +1558,7 @@
       // Completed
       solveStepIndex = solveSequence.length - 1;
       markActiveMove(-1);
+      assertVisualState("solve playback");
       setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束，但状态未完全复原。");
       finishSolve();
     }
@@ -1169,6 +1566,7 @@
     function finishSolve() {
       solvePaused = false;
       isSolving = false;
+      solveNavigationBusy = false;
       setControlsEnabled(true);
       updateSolvePlayButton();
     }
@@ -1178,7 +1576,7 @@
     }
 
     async function toggleSolvePause() {
-      if (solveSequence.length === 0) return;
+      if (solveSequence.length === 0 || solveNavigationBusy || (isBusy && solvePaused)) return;
       solvePaused = !solvePaused;
       updateSolvePlayButton();
 
@@ -1196,95 +1594,116 @@
     }
 
     async function stepSolveNext() {
-      if (solveSequence.length === 0) return;
+      if (solveSequence.length === 0 || isBusy || solveNavigationBusy) return;
       if (solveStepIndex >= solveSequence.length - 1) return;
 
-      // If we were auto-playing, pause first
-      if (!solvePaused) {
-        solvePaused = true;
-        updateSolvePlayButton();
-      }
-
-      const nextIndex = solveStepIndex + 1;
-      solveStepIndex = nextIndex;
-      markActiveMove(nextIndex);
+      solveNavigationBusy = true;
       setControlsEnabled(true);
-      await applyMove(solveSequence[nextIndex], { animate: true, updateModel: true, countMove: true });
+      try {
+        // If we were auto-playing, pause first
+        if (!solvePaused) {
+          solvePaused = true;
+          updateSolvePlayButton();
+        }
 
-      if (nextIndex >= solveSequence.length - 1) {
-        markActiveMove(-1);
-        setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束。");
-        finishSolve();
-      } else {
-        setStatus(`步骤 ${nextIndex + 1}/${solveSequence.length} — 已暂停`);
+        const nextIndex = solveStepIndex + 1;
+        solveStepIndex = nextIndex;
+        markActiveMove(nextIndex);
+        setControlsEnabled(true);
+        await applyMove(solveSequence[nextIndex], { animate: true, updateModel: true, countMove: true });
+
+        if (nextIndex >= solveSequence.length - 1) {
+          markActiveMove(-1);
+          setStatus(cubeModel.isSolved() ? "复原完成。" : "动画结束。");
+          finishSolve();
+        } else {
+          setStatus(`步骤 ${nextIndex + 1}/${solveSequence.length} — 已暂停`);
+        }
+      } finally {
+        solveNavigationBusy = false;
+        setControlsEnabled(true);
       }
     }
 
     async function stepSolvePrev() {
-      if (solveSequence.length === 0) return;
+      if (solveSequence.length === 0 || isBusy || solveNavigationBusy) return;
       if (solveStepIndex < 0) return;
 
-      // Pause if playing
-      if (!solvePaused) {
-        solvePaused = true;
-        updateSolvePlayButton();
-      }
-
-      const currentMove = solveSequence[solveStepIndex];
-      const inverse = invertMove(currentMove);
-      if (!inverse) return;
-
-      solveStepIndex -= 1;
+      solveNavigationBusy = true;
       setControlsEnabled(true);
-      await applyMove(inverse, { animate: true, updateModel: true, countMove: false, recordHistory: false });
-      // Decrement move total since we're going backward
-      moveTotal = Math.max(0, moveTotal - 1);
-      ui.moveCount.textContent = String(moveTotal);
+      try {
+        // Pause if playing
+        if (!solvePaused) {
+          solvePaused = true;
+          updateSolvePlayButton();
+        }
 
-      if (solveStepIndex >= 0) {
-        markActiveMove(solveStepIndex);
-        setStatus(`步骤 ${solveStepIndex + 1}/${solveSequence.length} — 已暂停`);
-      } else {
-        markActiveMove(-1);
-        setStatus("已回退到求解开始状态。");
+        const currentMove = solveSequence[solveStepIndex];
+        const inverse = invertMove(currentMove);
+        if (!inverse) return;
+
+        solveStepIndex -= 1;
+        setControlsEnabled(true);
+        await applyMove(inverse, { animate: true, updateModel: true, countMove: false, recordHistory: false });
+        // Decrement move total since we're going backward
+        moveTotal = Math.max(0, moveTotal - 1);
+        ui.moveCount.textContent = String(moveTotal);
+
+        if (solveStepIndex >= 0) {
+          markActiveMove(solveStepIndex);
+          setStatus(`步骤 ${solveStepIndex + 1}/${solveSequence.length} — 已暂停`);
+        } else {
+          markActiveMove(-1);
+          setStatus("已回退到求解开始状态。");
+        }
+      } finally {
+        solveNavigationBusy = false;
+        setControlsEnabled(true);
       }
     }
 
     async function navigateToSolveStep(targetIndex) {
-      if (solveSequence.length === 0 || isBusy) return;
+      if (solveSequence.length === 0 || isBusy || solveNavigationBusy) return;
       if (targetIndex < -1 || targetIndex >= solveSequence.length) return;
 
-      // Pause auto-play
-      if (!solvePaused) {
-        solvePaused = true;
-        updateSolvePlayButton();
-      }
-
-      if (targetIndex > solveStepIndex) {
-        // Go forward
-        for (let i = solveStepIndex + 1; i <= targetIndex; i += 1) {
-          solveStepIndex = i;
-          markActiveMove(i);
-          await applyMove(solveSequence[i], { animate: true, updateModel: true, countMove: true });
+      solveNavigationBusy = true;
+      setControlsEnabled(true);
+      try {
+        // Pause auto-play
+        if (!solvePaused) {
+          solvePaused = true;
+          updateSolvePlayButton();
         }
-      } else if (targetIndex < solveStepIndex) {
-        // Go backward
-        for (let i = solveStepIndex; i > targetIndex; i -= 1) {
-          const inverse = invertMove(solveSequence[i]);
-          if (!inverse) continue;
-          solveStepIndex = i - 1;
-          await applyMove(inverse, { animate: true, updateModel: true, countMove: false, recordHistory: false });
-          moveTotal = Math.max(0, moveTotal - 1);
-          ui.moveCount.textContent = String(moveTotal);
-          if (solveStepIndex >= 0) {
-            markActiveMove(solveStepIndex);
-          } else {
-            markActiveMove(-1);
+
+        if (targetIndex > solveStepIndex) {
+          // Go forward
+          for (let i = solveStepIndex + 1; i <= targetIndex; i += 1) {
+            solveStepIndex = i;
+            markActiveMove(i);
+            await applyMove(solveSequence[i], { animate: true, updateModel: true, countMove: true });
+          }
+        } else if (targetIndex < solveStepIndex) {
+          // Go backward
+          for (let i = solveStepIndex; i > targetIndex; i -= 1) {
+            const inverse = invertMove(solveSequence[i]);
+            if (!inverse) continue;
+            solveStepIndex = i - 1;
+            await applyMove(inverse, { animate: true, updateModel: true, countMove: false, recordHistory: false });
+            moveTotal = Math.max(0, moveTotal - 1);
+            ui.moveCount.textContent = String(moveTotal);
+            if (solveStepIndex >= 0) {
+              markActiveMove(solveStepIndex);
+            } else {
+              markActiveMove(-1);
+            }
           }
         }
-      }
 
-      setStatus(`跳转到步骤 ${targetIndex + 1}/${solveSequence.length} — 已暂停`);
+        setStatus(`跳转到步骤 ${targetIndex + 1}/${solveSequence.length} — 已暂停`);
+      } finally {
+        solveNavigationBusy = false;
+        setControlsEnabled(true);
+      }
     }
 
     function solveCube() {
@@ -1311,6 +1730,37 @@
       if (failed.length) {
         throw new Error(`转动定义与求解器不一致：${failed.join(" ")}`);
       }
+    }
+
+    function assertVisualState(reason, move = "") {
+      const visualState = createLogicalStateFromCubelets();
+      const visualFacelets = logicalStateToFacelets(visualState);
+      const modelFacelets = cubeModel.asString();
+      if (visualFacelets === modelFacelets) return true;
+
+      const label = move ? `${reason}: ${move}` : reason;
+      console.warn("视觉状态与求解器状态不一致", { reason: label, visualFacelets, modelFacelets });
+      setStatus(`状态同步异常（${label}），建议重置后重试。`, true);
+      return false;
+    }
+
+    function createLogicalStateFromCubelets() {
+      const worldQuaternion = new THREE.Quaternion();
+      return cubelets.map((cubelet) => {
+        const coord = cubelet.userData.coord;
+        const stickers = [];
+        cubelet.children.forEach((child) => {
+          if (!child.isMesh || child.userData.face === undefined) return;
+          const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(child.getWorldQuaternion(worldQuaternion));
+          const color = child.userData.paintColor || child.userData.face;
+          stickers.push({ normal: vectorToParts(snapVector(normal)), color });
+        });
+        return { coord: [coord.x, coord.y, coord.z], stickers };
+      });
+    }
+
+    function vectorToParts(vector) {
+      return [Math.round(vector.x), Math.round(vector.y), Math.round(vector.z)];
     }
 
     function createLogicalState() {
@@ -1452,11 +1902,19 @@
 
     function resetCube() {
       if (isBusy || isSolving) return;
+      stopTimer(false);
+      ui.timerDisplay.textContent = "0.00";
+      ui.timerStatus.textContent = "打乱魔方后，手动转层将自动开始计时";
+      ui.timerStatus.style.color = "var(--muted)";
+      timerReadyToStart = false;
       createCube();
+      assertVisualState("reset");
       moveHistory = [];
+      redoHistory = [];
       solveSequence = [];
       solveStepIndex = -1;
       solvePaused = false;
+      solveNavigationBusy = false;
       ui.stepNav.style.display = "none";
       setStatus("已重置为复原状态。");
       setControlsEnabled(true);
@@ -1476,9 +1934,192 @@
       const inverse = invertMove(lastMove);
       if (!inverse) return;
       setStatus(`撤销：${lastMove} → ${inverse}`);
+      redoHistory.push(lastMove);
       await applyMove(inverse, { animate: true, updateModel: true, countMove: true, recordHistory: false });
       setStatus(moveHistory.length ? `已撤销，剩余 ${moveHistory.length} 步可回退` : "已回退至初始状态。");
       setControlsEnabled(true);
+    }
+
+    async function redoLastMove() {
+      if (isBusy || isSolving || redoHistory.length === 0) return;
+      const nextMove = redoHistory.pop();
+      setStatus(`重做：${nextMove}`);
+      await applyMove(nextMove, { animate: true, updateModel: true, countMove: true, recordHistory: true, clearRedo: false });
+      setStatus(`已重做。`);
+      setControlsEnabled(true);
+    }
+
+    function startTimer() {
+      timerReadyToStart = false;
+      timerRunning = true;
+      timerStartTime = performance.now();
+      ui.timerStatus.textContent = "正在计时...";
+      ui.timerStatus.style.color = "var(--accent)";
+      
+      timerInterval = setInterval(() => {
+        const elapsed = (performance.now() - timerStartTime) / 1000;
+        ui.timerDisplay.textContent = elapsed.toFixed(2);
+      }, 10);
+    }
+
+    function stopTimer(isSolved = false) {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      timerRunning = false;
+      if (isSolved) {
+        const elapsed = ((performance.now() - timerStartTime) / 1000).toFixed(2);
+        ui.timerDisplay.textContent = elapsed;
+        ui.timerStatus.textContent = `完成！成绩: ${elapsed} 秒`;
+        ui.timerStatus.style.color = "var(--accent)";
+      } else {
+        ui.timerStatus.textContent = "已停止";
+        ui.timerStatus.style.color = "var(--muted)";
+      }
+    }
+
+    function togglePaintMode() {
+      if (isPainting) {
+        exitPaintMode(false);
+      } else {
+        enterPaintMode();
+      }
+    }
+
+    function enterPaintMode() {
+      if (isBusy || isSolving) return;
+      stopTimer(false);
+      isSolving = false;
+      solveSequence = [];
+      solveStepIndex = -1;
+      ui.stepNav.style.display = "none";
+      ui.moveList.innerHTML = "";
+      ui.solveCount.textContent = "0";
+
+      isPainting = true;
+      ui.paintPanel.style.display = "flex";
+      ui.paintModeButton.textContent = "❌ 退出涂色模式";
+      ui.paintModeButton.style.backgroundColor = "var(--danger)";
+      ui.paintModeButton.style.color = "#fff";
+      ui.paintModeButton.style.borderColor = "transparent";
+      
+      resetCube();
+      setStatus("涂色模式激活：选择下方颜色，点击贴纸着色。中心块固定不可改。");
+      setControlsEnabled(true);
+    }
+
+    function exitPaintMode(keepSolveState = false) {
+      isPainting = false;
+      ui.paintPanel.style.display = "none";
+      ui.paintModeButton.textContent = "🎨 开启手动涂色复原";
+      ui.paintModeButton.style.backgroundColor = "";
+      ui.paintModeButton.style.color = "";
+      ui.paintModeButton.style.borderColor = "";
+      
+      if (!keepSolveState) {
+        resetCube();
+      } else {
+        setControlsEnabled(true);
+      }
+    }
+
+    function isCenterCubelet(coord) {
+      return (Math.abs(coord.x) + Math.abs(coord.y) + Math.abs(coord.z)) === 1;
+    }
+
+    function paintSticker(hit) {
+      const mesh = hit.object;
+      const cubelet = hit.cubelet;
+      
+      if (isCenterCubelet(cubelet.userData.coord)) {
+        setStatus("中心块位置固定，代表本面基础色，不可涂色。", true);
+        return;
+      }
+      
+      mesh.material.color.setHex(FACE_COLORS[selectedPaintColor]);
+      mesh.userData.paintColor = selectedPaintColor;
+      setStatus(`已将贴纸涂为 ${FACE_NAMES_ZH[selectedPaintColor]}。`);
+    }
+
+    async function handlePaintSolve() {
+      setStatus("正在读取魔方状态...");
+      try {
+        const visualState = createLogicalStateFromCubelets();
+        const facelets = logicalStateToFacelets(visualState);
+        const parsedCube = validatePaintedState(facelets);
+        
+        setStatus("状态合法！正在寻找最短解...");
+        cubeModel = parsedCube;
+        
+        isSolving = true;
+        setControlsEnabled(false);
+        await waitFrame();
+        
+        const solution = solveCube();
+        solveSequence = solution;
+        solveStepIndex = -1;
+        renderMoveList(solution);
+        ui.solveCount.textContent = String(solution.length);
+        ui.stepNav.style.display = "flex";
+        updateSolvePlayButton();
+        
+        exitPaintMode(true);
+        setStatus(`已生成公式（共 ${solution.length} 步）。`);
+        setControlsEnabled(true);
+        await playSolveFrom(0);
+      } catch (error) {
+        console.error(error);
+        setStatus(`求解失败：${error.message}`, true);
+        isSolving = false;
+        setControlsEnabled(true);
+      }
+    }
+
+    function validatePaintedState(facelets) {
+      const counts = { U: 0, R: 0, F: 0, D: 0, L: 0, B: 0 };
+      for (const char of facelets) {
+        counts[char] = (counts[char] || 0) + 1;
+      }
+      const invalidColors = Object.entries(counts).filter(([color, count]) => count !== 9);
+      if (invalidColors.length > 0) {
+        const details = invalidColors.map(([col, cnt]) => `${FACE_NAMES_ZH[col]}需要9个（实际${cnt}个）`).join("，");
+        throw new Error(`贴纸数量不正确：${details}`);
+      }
+
+      let testCube;
+      try {
+        testCube = window.Cube.fromString(facelets);
+      } catch (err) {
+        throw new Error("魔方状态解析失败，请检查着色是否合规。");
+      }
+
+      for (let i = 0; i < 8; i++) {
+        if (testCube.cp[i] === undefined || testCube.cp[i] === null || testCube.cp[i] === -1) {
+          throw new Error("检测到无效的角块颜色组合，请检查角块着色。");
+        }
+      }
+      for (let i = 0; i < 12; i++) {
+        if (testCube.ep[i] === undefined || testCube.ep[i] === null || testCube.ep[i] === -1) {
+          throw new Error("检测到无效的棱块颜色组合，请检查棱块着色。");
+        }
+      }
+
+      const coSum = testCube.co.reduce((a, b) => a + b, 0);
+      if (coSum % 3 !== 0) {
+        throw new Error("角块朝向有误（总方向和模 3 不为 0，相当于有角块被拧过），请修正。");
+      }
+
+      const eoSum = testCube.eo.reduce((a, b) => a + b, 0);
+      if (eoSum % 2 !== 0) {
+        throw new Error("棱块朝向有误（总方向和模 2 不为 0，相当于有棱块被翻转过），请修正。");
+      }
+
+      if (testCube.cornerParity() !== testCube.edgeParity()) {
+        throw new Error("奇偶性冲突（相当于仅两个块对调位置，正常魔方旋转无法形成此状态），请修正。");
+      }
+
+      return testCube;
     }
 
     boot();
